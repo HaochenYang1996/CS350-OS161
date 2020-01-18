@@ -45,7 +45,7 @@
 #include "opt-synchprobs.h"
 #include "opt-sfs.h"
 #include "opt-net.h"
-
+//#include <kern/dev/lamebus/ltrace.h>
 /*
  * In-kernel menu and command dispatcher.
  */
@@ -111,6 +111,16 @@ cmd_progthread(void *ptr, unsigned long nargs)
 
 	/* NOTREACHED: runprogram only returns on error. */
 }
+
+
+// Haochen's work
+static int cmd_dth()
+{
+	dbflags = 0x0010;
+//    trace_debug("current DB flag is: %s\n", dbflags);
+	return 0;
+}
+
 
 /*
  * Common code for cmd_prog and cmd_shell.
@@ -506,7 +516,8 @@ static const char *mainmenu[] = {
 #endif
 	"[kh] Kernel heap stats              ",
 	"[q] Quit and shut down              ",
-	NULL
+	"[dth] Enable DBTread Error          ",	
+NULL
 };
 
 static
@@ -536,6 +547,7 @@ static struct {
 	{ "?t",		cmd_testmenu },
 
 	/* operations */
+    { "dth", cmd_dth},
 	{ "s",		cmd_shell },
 	{ "p",		cmd_prog },
 	{ "mount",	cmd_mount },
