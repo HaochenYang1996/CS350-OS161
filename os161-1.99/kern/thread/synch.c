@@ -43,7 +43,7 @@
 ////////////////////////////////////////////////////////////
 //
 // Semaphore.
-
+// haochen
 struct semaphore *
 sem_create(const char *name, int initial_count)
 {
@@ -208,8 +208,8 @@ lock_acquire(struct lock *lock)
                 spinlock_acquire(&lock->lk_spinlock);
         }
         KASSERT(lock->held == false);
-        lock->lk_owner = curthread;
         lock->held = true;
+        lock->lk_owner = curthread;
         spinlock_release(&lock->lk_spinlock);
         // (void)lock;  // suppress warning until code gets written
 }
@@ -289,8 +289,8 @@ cv_wait(struct cv *cv, struct lock *lock)
         // Write this
         // (void)cv;    // suppress warning until code gets written
         // (void)lock;  // suppress warning until code gets written
-        lock_release(lock);
         wchan_lock(cv->cv_wchan);
+        lock_release(lock);
         wchan_sleep(cv->cv_wchan);
         lock_acquire(lock);
 }
