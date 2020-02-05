@@ -5,7 +5,7 @@
 #include <synchprobs.h>
 #include <synch.h>
 #include <opt-A1.h>
-//haochen
+//haochen3
 /* 
  * This simple default synchronization mechanism allows only vehicle at a time
  * into the intersection.   The intersectionSem is used as a a lock.
@@ -25,24 +25,15 @@
 //  */
 // static struct semaphore *intersectionSem;
 
-static int volatile waitList[12]; 
+static int fourDirStatus[4];
+static int waitList[4]; 
+static int dir = -1;  
 
 static struct lock *trafficLock;
-static struct cv *ns;   
-static struct cv *ne;
-static struct cv *nw;
-
-static struct cv *sn;
-static struct cv *se;
-static struct cv *sw;
-
-static struct cv *en;
-static struct cv *es;
-static struct cv *ew;
-
-static struct cv *wn;
-static struct cv *ws;
-static struct cv *we;
+static struct cv *n;   
+static struct cv *s;
+static struct cv *w;
+static struct cv *e;
 
 /* 
  * The simulation driver will call this function once before starting
@@ -62,80 +53,34 @@ intersection_sync_init(void)
   // }
   // return;
 
-	trafficLock = lock_create("trafficLock");
-	ns = cv_create("ns"); 
-	ne = cv_create("ne");
-	nw = cv_create("nw");
+    trafficLock = lock_create("trafficLock");
+    n = cv_create("n"); 
+    s = cv_create("s");
+    w = cv_create("w");
+    e = cv_create("e");
 
-	sn = cv_create("sn");
-	se = cv_create("se");
-	sw = cv_create("sw");
-
-	en = cv_create("en");
-	es = cv_create("es");
-	ew = cv_create("ew");
-
-	wn = cv_create("wn");
-	ws = cv_create("ws");
-	we = cv_create("we");
-
-
-	// chekc null
-	if (trafficLock == NULL) {
+    // chekc null
+    if (trafficLock == NULL) {
     panic("could not create Traffic lock ");
-	}
-	if (ns == NULL  ) {
-		panic("could not create ns CV");
-	}
-	if (ne == NULL) {
-		panic("could not create ns CV");
-	}
-	if (nw == NULL) {
-		panic("could not create nw CV");
-	}
+    }
+    if (n == NULL  ) {
+        panic("could not create n CV");
+    }
+    if (s == NULL) {
+        panic("could not create s CV");
+    }
+    if (w == NULL) {
+        panic("could not create w CV");
+    }
 
-	if (sn == NULL) {
-		panic("could not create sn CV");
-	}
-	if (se == NULL) {
-		panic("could not create se CV");
-	}
-	if (sw == NULL) {
-		panic("could not create sw CV");
-	}
-
-	if (en == NULL) {
-		panic("could not create en CV");
-	}
-	if (es == NULL) {
-		panic("could not create es CV");
-	}
-	if (ew == NULL) {
-		panic("could not create ew CV");
-	}
-
-	if (wn == NULL) {
-		panic("could not create wn CV");
-	}
-	if (ws == NULL) {
-		panic("could not create ws CV");
-	}
-	if (we == NULL) {
-		panic("could not create we CV");
-	}
-	waitList[0] = 0;  //ns
-	waitList[1] = 0;  //ne
-	waitList[2] = 0;  //nw
-	waitList[3] = 0;  //sn
-	waitList[4] = 0;  //se
-	waitList[5] = 0;  //sw
-	waitList[6] = 0;  //en
-	waitList[7] = 0;  //es
-	waitList[8] = 0;  //ew
-	waitList[9] = 0;  //wn
-	waitList[10] = 0; //ws
-	waitList[11] = 0; //we
-	return;
+    if (e == NULL) {
+        panic("could not create e CV");
+    }
+    waitList[0] = 0;
+    waitList[1] = 0;
+    waitList[2] = 0;
+    waitList[3] = 0;
+    return;
 }
 
 /* 
@@ -152,41 +97,18 @@ intersection_sync_cleanup(void)
   // KASSERT(intersectionSem != NULL);
   // sem_destroy(intersectionSem);
 
-	KASSERT(trafficLock != NULL);
-	lock_destroy(trafficLock);
+    KASSERT(trafficLock != NULL);
+    lock_destroy(trafficLock);
 
-	KASSERT(ns != NULL);  
-	KASSERT(ne != NULL);
-	KASSERT(nw != NULL);
-
-	KASSERT(sn != NULL);
-	KASSERT(se != NULL);
-	KASSERT(sw != NULL);
-
-	KASSERT(en != NULL);
-	KASSERT(es != NULL);
-	KASSERT(ew != NULL);
-
-	KASSERT(wn != NULL);
-	KASSERT(ws != NULL);
-	KASSERT(we != NULL);
-
-	cv_destroy(ns);
-	cv_destroy(ne);
-	cv_destroy(nw);
-
-	cv_destroy(se);
-	cv_destroy(sw);
-	cv_destroy(sn);
-
-	cv_destroy(es);
-	cv_destroy(en);
-	cv_destroy(ew);
-
-	cv_destroy(ws);
-	cv_destroy(we);
-	cv_destroy(wn);
-	return;
+    KASSERT(n != NULL);  
+    KASSERT(s != NULL);
+    KASSERT(w != NULL);
+    KASSERT(e != NULL);
+    cv_destroy(n);
+    cv_destroy(s);
+    cv_destroy(w);
+    cv_destroy(e);
+    return;
 }
 
 
@@ -203,212 +125,80 @@ intersection_sync_cleanup(void)
  * return value: none
  */
 
+
+// idea of intersection_before_entry follows lecture notes product/consume example
+// here is the psuedo code:
+// acqurire traffic lock first:
+// if (intersection is being used by other vehicles' moves which block current move):
+//      wait on its cv: wait for the current path till it's avaialbe
+// else:
+//      waitList[current Path] += 1 (means one more car is waiting on this cv)
+// release traffic lock
+
 void
 intersection_before_entry(Direction origin, Direction destination) 
 {
   /* replace this default implementation with your own implementation */
 //   (void)origin;  /* avoid compiler complaint about unused parameter */
-//   (void)destination; /* avoid compiler complaint about unused parameter */
+    (void)destination; /* avoid compiler complaint about unused parameter */
   // KASSERT(intersectionSem != NULL);
   // P(intersectionSem);
   //when acquire northCV, means we can go from north to our destination
-	KASSERT(ns != NULL);  
-	KASSERT(ne != NULL);
-	KASSERT(nw != NULL);
+    KASSERT(trafficLock != NULL);
+    KASSERT(n != NULL);  
+    KASSERT(s != NULL);
+    KASSERT(w != NULL);
+    KASSERT(e != NULL);
+    lock_acquire(trafficLock);
+    switch (origin){
+        case north:
+            if ((dir!= 0 && dir!=-1) || fourDirStatus[1]!=0|| fourDirStatus[2]!=0|| fourDirStatus[3]!=0) {
+                waitList[0]+=1;
+                cv_wait(n, trafficLock);
+            }
+            if (dir == -1) {
+                dir = 0;
+            }
+            fourDirStatus[0]+=1;
+            waitList[0]=0;
+            break;
+        case east:
+            if ((dir!= 1 && dir!=-1) || fourDirStatus[0]!=0|| fourDirStatus[2]!=0|| fourDirStatus[3]!=0) {
+                waitList[1]+=1;
+                cv_wait(e, trafficLock);
+            }
+            if (dir == -1) {
+                dir = 1;
+            }
+            fourDirStatus[1]+=1;
+            waitList[1]=0;
+            break;
+        case south:
+            if ((dir!= 2 && dir!=-1) || fourDirStatus[0]!=0|| fourDirStatus[1]!=0|| fourDirStatus[3]!=0) {
+                waitList[2]+=1;
+                cv_wait(s, trafficLock);
+            }
+            if (dir == -1) {
+                dir = 2;
+            }
+            fourDirStatus[2]+=1;
+            waitList[2]=0;
+            break;
+        case west:
+            if ((dir!= 3 && dir!=-1) || fourDirStatus[0]!=0|| fourDirStatus[1]!=0|| fourDirStatus[2]!=0) {
+                waitList[3]+=1;
+                cv_wait(w, trafficLock);
+            }
+            if (dir == -1) {
+                dir = 3;
+            }
+            fourDirStatus[3]+=1;
+            waitList[3]=0;
+            break;
+    }
 
-	KASSERT(sn != NULL);
-	KASSERT(se != NULL);
-	KASSERT(sw != NULL);
-
-	KASSERT(en != NULL);
-	KASSERT(es != NULL);
-	KASSERT(ew != NULL);
-
-	KASSERT(wn != NULL);
-	KASSERT(ws != NULL);
-	KASSERT(we != NULL);
-	KASSERT(trafficLock != NULL);
-	switch (origin){
-		case north:
-			// north -> south
-			if (destination == south) {
-				lock_acquire(trafficLock);
-				while (1) {
-					if (waitList[8] != 0 || waitList[11] != 0 || waitList[7] != 0 || waitList[10] != 0 || waitList[9] != 0 || waitList[5] != 0)
-					{
-						cv_wait(ns, trafficLock);
-					} else {
-						waitList[0] += 1;
-						break;
-					}
-				}
-				lock_release(trafficLock);
-			}
-			// north -> east
-			else if (destination == east) {
-				lock_acquire(trafficLock);
-				while (1) {
-					if (waitList[4] != 0 || waitList[11] != 0 || waitList[5] != 0 || waitList[3] != 0 || waitList[7] != 0 || waitList[9] != 0 || waitList[8] != 0)
-					{     
-						cv_wait(ne, trafficLock);
-					} else {
-						waitList[1] += 1;
-						break;
-					}
-				}
-				lock_release(trafficLock);
-			}
-			else {
-				lock_acquire(trafficLock);
-				while (1) {
-					if (waitList[8] != 0 || waitList[5] != 0) 
-					{
-            cv_wait(nw, trafficLock);
-					} else {
-						waitList[2] += 1;
-						break;
-					}
-				}
-				lock_release(trafficLock);
-			}
-			break;
-		case south:
-			// south -> north
-			if (destination == north) {
-				lock_acquire(trafficLock);
-				while (1) {
-					if (waitList[11] != 0 || waitList[8] != 0 || waitList[9] != 0 || waitList[6] != 0 || waitList[7] != 0 || waitList[1] != 0)
-					{
-						cv_wait(sn, trafficLock);
-					} else {
-						waitList[3] += 1;
-						break;
-					}
-				}
-				lock_release(trafficLock);
-			}
-			// south -> west
-			else if (destination == west) {
-				lock_acquire(trafficLock);
-				while (1){
-					if (waitList[8] != 0 || waitList[2] != 0 || waitList[11] != 0 || waitList[0] != 0 || waitList[7] != 0 || waitList[1] != 0 || waitList[9] != 0)
-					{
-            cv_wait(sw, trafficLock);
-					} else {
-						waitList[5] += 1;
-						break;
-					}
-			}
-			lock_release(trafficLock);
-			}
-			// south -> east, right turn 
-			else {
-				lock_acquire(trafficLock);
-				while (1) {
-					if (waitList[11] != 0 || waitList[1] != 0) 
-					{
-            cv_wait(se, trafficLock);
-					} else {
-						waitList[4] += 1;
-						break;
-					}
-				}
-				lock_release(trafficLock);
-			}
-			break;
-		case west:
-			// west -> east
-			if (destination == east) {
-				lock_acquire(trafficLock);
-				while (1) {
-					if (waitList[0] != 0 || waitList[3] != 0 || waitList[1] != 0 || waitList[4] != 0 || waitList[7] != 0 || waitList[5] != 0)
-					{
-						cv_wait(we, trafficLock);
-					} else {
-						waitList[11] += 1;
-						break;
-					}
-				}
-				lock_release(trafficLock);
-			}
-
-			// west->north
-			else if (destination == north) {
-				lock_acquire(trafficLock);
-				while (1) {
-					if (waitList[3] != 0 || waitList[6] != 0 || waitList[7] != 0 || waitList[1] != 0 || waitList[5] != 0 || waitList[8] != 0 || waitList[0] != 0) 
-					{
-						cv_wait(wn, trafficLock);
-					} else {
-						waitList[9] += 1;
-						break;
-					}
-				}
-				lock_release(trafficLock);
-			}
-			// west->south
-			else {
-				lock_acquire(trafficLock);
-				while (1) {
-					if (waitList[0] != 0 || waitList[7] != 0) 
-					{        
-						cv_wait(ws, trafficLock);
-					} else {
-						waitList[10] += 1;
-						break;
-					}
-				}
-				lock_release(trafficLock);
-			}
-			break;
-		case east:
-			// east->south
-			if (destination == south) {
-				lock_acquire(trafficLock);
-				while (1) {
-					if (waitList[0] != 0 || waitList[10] != 0 || waitList[1] != 0 || waitList[11] != 0 || waitList[9] != 0 || waitList[5] != 0 || waitList[3] != 0) 
-					{
-						cv_wait(es, trafficLock);
-					} else {
-						waitList[7] += 1;
-						break;
-					}
-				}
-				lock_release(trafficLock);
-			}
-
-			// east -> west
-			//ns , sn, nw, sw, ne, wn
-			else if (destination == west) {
-				lock_acquire(trafficLock);
-				while (1) {
-					if (waitList[2] != 0 || waitList[0] != 0 || waitList[3] != 0 || waitList[9] != 0 || waitList[1] != 0 || waitList[5] != 0) 
-					{          
-						cv_wait(ew, trafficLock);
-					} else {
-						waitList[8] += 1;
-						break;
-					}
-				}
-				lock_release(trafficLock);
-			}
-			// east -> north
-			else {
-				lock_acquire(trafficLock);
-				while (1) {
-					if (waitList[3] != 0 || waitList[9] != 0) 
-					{      
-						cv_wait(en, trafficLock);
-					} else {
-						waitList[6] += 1;
-						break;
-					}
-				}
-				lock_release(trafficLock);
-			}
-			break;
-	}
-  return;
+    lock_release(trafficLock);
+    return;
 }
 
 
@@ -423,136 +213,97 @@ intersection_before_entry(Direction origin, Direction destination)
  * return value: none
  */
 
+// idea of intersection_after_exit follows lecture notes product/consume example
+// when a car leaves its intersection:
+// lock traffic lock
+// waitList[current Path] += 1 (means one less car is waiting on this cv)
+// broadcasr all other CVs which were blocked.
+// release traffic lock
+
+// n e s w
+// 0 1 2 3
 void
 intersection_after_exit(Direction origin, Direction destination) 
 {
-	KASSERT(ns != NULL);  
-	KASSERT(ne != NULL);
-	KASSERT(nw != NULL);
-
-	KASSERT(sn != NULL);
-	KASSERT(se != NULL);
-	KASSERT(sw != NULL);
-
-	KASSERT(en != NULL);
-	KASSERT(es != NULL);
-	KASSERT(ew != NULL);
-
-	KASSERT(wn != NULL);
-	KASSERT(ws != NULL);
-	KASSERT(we != NULL);
-	KASSERT(trafficLock != NULL);
-	lock_acquire(trafficLock);
-	switch (origin) {
-	case north:
-		if (destination == east) {
-			// ne
-			waitList[1]-=1;
-			cv_broadcast(es, trafficLock);
-			cv_broadcast(ew, trafficLock);
-			cv_broadcast(sn, trafficLock);
-			cv_broadcast(sw, trafficLock);
-			cv_broadcast(se, trafficLock);
-			cv_broadcast(we, trafficLock);
-			cv_broadcast(wn, trafficLock);
-		} else if (destination == south) { 
-			// ns
-			waitList[0]-=1;
-			cv_broadcast(es, trafficLock);
-			cv_broadcast(ew, trafficLock);
-			cv_broadcast(sw, trafficLock);
-			cv_broadcast(we, trafficLock);
-			cv_broadcast(wn, trafficLock);
-			cv_broadcast(ws, trafficLock);
-		} else {
-			//nw
-			waitList[2]-=1;
-			cv_broadcast(ew, trafficLock);
-			cv_broadcast(sw, trafficLock);
-		}
-		break;
-	case east:
-			if (destination == west) { 
-				//ew
-				waitList[8]-=1;
-				cv_broadcast(ns, trafficLock);
-				cv_broadcast(ne, trafficLock);
-				cv_broadcast(nw, trafficLock);
-				cv_broadcast(sn, trafficLock);
-				cv_broadcast(sw, trafficLock);
-				cv_broadcast(wn, trafficLock);
-			} else if (destination == south) { 
-				//es
-				waitList[7] -=1;
-				cv_broadcast(ns, trafficLock);
-				cv_broadcast(ne, trafficLock);
-				cv_broadcast(sn, trafficLock);
-				cv_broadcast(sw, trafficLock);
-				cv_broadcast(we, trafficLock);
-				cv_broadcast(wn, trafficLock);
-				cv_broadcast(ws, trafficLock);
-			} else { 
-				//en
-				waitList[6] -=1;
-				cv_broadcast(sn, trafficLock);
-				cv_broadcast(wn, trafficLock);
-			}
-		break;
-	case south:
-		if (destination == east) {
-			//se
-			waitList[4]-=1;
-			cv_broadcast(ne, trafficLock);
-			cv_broadcast(we, trafficLock);
-		} else if (destination == west) { 
-			//sw
-			waitList[5] -=1;
-			cv_broadcast(ns, trafficLock);
-			cv_broadcast(ne, trafficLock);
-			cv_broadcast(nw, trafficLock);
-			cv_broadcast(es, trafficLock);
-			cv_broadcast(ew, trafficLock);
-			cv_broadcast(we, trafficLock);
-			cv_broadcast(wn, trafficLock);
-		} else {
-			//sn
-			waitList[3] -=1;
-			cv_broadcast(ne, trafficLock);
-			cv_broadcast(es, trafficLock);
-			cv_broadcast(ew, trafficLock);
-			cv_broadcast(en, trafficLock);
-			cv_broadcast(we, trafficLock);
-			cv_broadcast(wn, trafficLock);
-		}
-		break;
-	case west:
-		if (destination == east) { 
-			//we
-			waitList[11] -=1;
-			cv_broadcast(ns, trafficLock);
-			cv_broadcast(ne, trafficLock);
-			cv_broadcast(es, trafficLock);
-			cv_broadcast(sn, trafficLock);
-			cv_broadcast(sw, trafficLock);
-			cv_broadcast(se, trafficLock);
-		} else if (destination == south) { 
-			// ws
-			waitList[10] -=1;
-			cv_broadcast(ns, trafficLock);
-			cv_broadcast(es, trafficLock);
-		} else { 
-			//wn
-			waitList[9] -=1;
-			cv_broadcast(ns, trafficLock);
-			cv_broadcast(ne, trafficLock);
-			cv_broadcast(es, trafficLock);
-			cv_broadcast(ew, trafficLock);
-			cv_broadcast(en, trafficLock);
-			cv_broadcast(sn, trafficLock);
-			cv_broadcast(sw, trafficLock);
-		}
-		break;
-	}
-	lock_release(trafficLock);
+    (void) destination;
+    KASSERT(trafficLock != NULL);
+    KASSERT(n != NULL);  
+    KASSERT(s != NULL);
+    KASSERT(w != NULL);
+    KASSERT(e != NULL);
+    lock_acquire(trafficLock);
+    switch (origin) {
+    case north:
+        fourDirStatus[0]-=1;
+        break;
+    case east:
+        fourDirStatus[1]-=1;
+        break;
+    case south:
+        fourDirStatus[2]-=1;
+        break;
+    case west:
+        fourDirStatus[3]-=1;
+        break;
+    }
+    if (fourDirStatus[0]==0 && fourDirStatus[1]==0 && fourDirStatus[2]==0 && fourDirStatus[3]==0) {
+        if (waitList[0]==0 && waitList[1]==0 && waitList[2]==0 && waitList[3]==0) {
+            dir = -1;
+            lock_release(trafficLock);
+            return;
+        } else {
+                switch (origin) {
+                    case north:
+                        if (waitList[3]>0) {
+                            dir = 3;
+                            cv_broadcast(w, trafficLock);
+                        } else if (waitList[2]>0) {
+                            dir = 2;
+                            cv_broadcast(s, trafficLock);
+                        } else {
+                            dir = 1;
+                            cv_broadcast(e, trafficLock);
+                        }
+                        break;
+                    case east:
+                        if (waitList[0]>0) {
+                            dir = 0;
+                            cv_broadcast(n, trafficLock);
+                        } else if (waitList[3]>0) {
+                            dir = 3;
+                            cv_broadcast(w, trafficLock);
+                        } else {
+                            dir = 2;
+                            cv_broadcast(s, trafficLock);
+                        }
+                        break;
+                    case south:
+                        if (waitList[1]>0) {
+                            dir = 1;
+                            cv_broadcast(e, trafficLock);
+                        } else if (waitList[0]>0) {
+                            dir = 0;
+                            cv_broadcast(n, trafficLock);
+                        } else {
+                            dir = 3;
+                            cv_broadcast(w, trafficLock);
+                        }
+                        break;
+                    case west:
+                        if (waitList[2]>0) {
+                            dir = 2;
+                            cv_broadcast(s, trafficLock);
+                        } else if (waitList[1]>0) {
+                            dir = 1;
+                            cv_broadcast(e, trafficLock);
+                        } else {
+                            dir = 0;
+                            cv_broadcast(n, trafficLock);
+                        }
+                        break;
+                } 
+        }
+    }
+    lock_release(trafficLock);
     return;
 }
