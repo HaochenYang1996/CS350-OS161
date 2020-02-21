@@ -69,7 +69,14 @@ struct proc {
 #endif
 
 	/* add more material here as needed */
-};
+    pid_t PID;
+    int exitCode;
+    struct proc* parent;
+    struct cv* p_cv;
+    struct array* children;
+    struct lock* plock; 
+
+};   Type TabNine::no_sem to suppress this message.
 
 /* This is the process structure for the kernel and for kernel-only threads. */
 extern struct proc *kproc;
