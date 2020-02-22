@@ -111,17 +111,26 @@ proc_create(const char *name)
 #endif // UW
 #if OPT_A2
     proc->pid = new_pid();
-    proc->exitCode = 0;
+    proc->exit_code = 0;
     proc->parent=NULL;
     proc->p_cv=cv_create("process CV");
 	if(proc->p_cv == NULL){
 	  panic("proc_creat does not create cv");
 	}
+	proc->wait_cv=cv_create("wait CV");
+	if(proc->wait_cv == NULL){
+	  panic("proc_creat does not create wait cv");
+	}
     proc->children = array_create();
-    proc->plock = lock_create("process lock");
-	if (proc->plock == NULL) {
-	  panic("proc_creat does not create lock");
+    proc->wait_lock = lock_create("process wait lock");
+	if (proc->wait_lock == NULL) {
+	  panic("proc_creat does not create wait lock");
 	}; 
+	proc->exit_lock = lock_create("process exit lock");
+	if (proc->exit_lock == NULL) {
+	  panic("proc_creat does not create exit lock");
+	}; 
+	proc->can_exit = false;
 #endif
 	return proc;
 }
@@ -182,7 +191,20 @@ proc_destroy(struct proc *proc)
 	  vfs_close(proc->console);
 	}
 #endif // UW
+#if OPT_A2
+	spinlock_acquire(&proc->p_lock);
+	for (unsigned int i = 0; i < array_num(proc->children); ++i) {
+		struct proc *p = array_get(proc->children, i);
+		p->parent = NULL;
+	}
+	spinlock_release(&proc->p_lock);
+	array_cleanup(proc->children);
+	lock_destroy(proc->exit_lock);
+	lock_destroy(proc->wait_lock);
+	cv_destroy(proc->p_cv);
+	cv_destroy(proc->wait_cv);
 
+#endif //OPT_A2
 	threadarray_cleanup(&proc->p_threads);
 	spinlock_cleanup(&proc->p_lock);
 
