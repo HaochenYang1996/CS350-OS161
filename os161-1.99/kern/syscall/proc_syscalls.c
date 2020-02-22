@@ -9,6 +9,8 @@
 #include <thread.h>
 #include <addrspace.h>
 #include <copyinout.h>
+#include "opt-A2.h"
+#include <mips/trapframe.h>
 
   /* this implementation of sys__exit does not do anything with the exit code */
   /* this needs to be fixed to get exit() and waitpid() working properly */
@@ -92,3 +94,57 @@ sys_waitpid(pid_t pid,
   return(0);
 }
 
+#if OPT_A2
+  pid_t sys_fork(pid_t *retval,struct trapframe *tf){
+    // create a new process
+    struct proc *child_process = proc_create_runprogram(curproc->p_name);
+    if (child_process == NULL) {
+      panic("ERROR: cannot create a child process by using a process name");
+      return ENOMEM; 
+    }
+
+    // point child to parent???
+    // child_process->parent =curproc;
+
+    // create address space for child
+    as_copy(curproc_getas(), &(child_process->p_addrspace));
+    if (child_process->p_addrspace == NULL) {
+      proc_destroy(child_process);
+      panic("ERROR: copy address space encounters error");
+      return ENOMEM; // should we use this error?
+    }
+     
+    // assign a new pid to the child process??
+    // char *child_pid = 
+
+    // assign parent trap frame to child
+    struct trapframe *child_tf = kmalloc(sizeof(struct trapframe));
+
+    if (child_tf == NULL) {
+      proc_destroy(child_process);
+      panic("ERROR: failed to create a trap frame for child");
+      return ENOMEM;
+    }
+
+    memcpy(child_tf, tf, sizeof(struct trapframe));
+    
+
+    // create a new thread  as_copy(curproc_getas(), &(child->p_addrspace));
+    int create_thread_result = thread_fork(curthread->t_name, child_process, (void *) &enter_forked_process, child_tf, 0);
+    if (create_thread_result!=0) {
+      proc_destroy(child_process);
+      panic("ERROR: failed to create a new thread.");
+      return ENOMEM;
+    }
+
+    array_add(curproc->children, child_process, NULL);
+    child_process->parent = curproc;
+
+    *retval = child_process->pid;
+    return 0;
+  }
+#else
+// old (pre-A2) version of the code goes here,
+// and is ignored by the compiler when you compile ASST2 // the ‘‘else’’ part is optional and can be left
+// out if you are just inserting new code for ASST2
+#endif /* OPT_A2 */
