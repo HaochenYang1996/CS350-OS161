@@ -122,8 +122,9 @@ sys_waitpid(pid_t pid,
   if (process_to_wait->parent != curproc) return ECHILD;
 
   lock_acquire(process_to_wait->wait_lock);
-  while(!process_to_wait->can_exit) 
+  while(!process_to_wait->can_exit) {
   	cv_wait(process_to_wait->wait_cv, process_to_wait->wait_lock);
+    }
   lock_release(process_to_wait->wait_lock);
   exitstatus=process_to_wait->exit_code;
 #else
