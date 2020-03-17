@@ -65,15 +65,15 @@ main(int argc, char *argv[])
   (void)argc;
   (void)argv;
   pid_t pid1,pid2,pid3;
-  putchar('P');
+  putchar('1');     // P
+  putchar('\n'); 
+  pid1 = dofork(1); // A fork exit
+  putchar('2');     // P
   putchar('\n');
-  pid1 = dofork(1);
-  putchar('P');
+  pid2 = dofork(2); // B fork exit B
+  putchar('3');     // P
   putchar('\n');
-  pid2 = dofork(2);
-  putchar('P');
-  putchar('\n');
-  pid3 = dofork(3);
+  pid3 = dofork(3); // C fork exit C
   dowait(pid1,1);
   dowait(pid2,2);
   dowait(pid3,3);

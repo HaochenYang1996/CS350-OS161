@@ -11,6 +11,7 @@
 #include <copyinout.h>
 #include "opt-A2.h"
 #include <mips/trapframe.h>
+#include <synch.h>
 
   /* this implementation of sys__exit does not do anything with the exit code */
   /* this needs to be fixed to get exit() and waitpid() working properly */
@@ -26,6 +27,16 @@ void sys__exit(int exitcode) {
   DEBUG(DB_SYSCALL,"Syscall: _exit(%d)\n",exitcode);
 
   KASSERT(curproc->p_addrspace != NULL);
+
+#if OPT_A2
+
+  int arrayLength = array_num(p->children);
+  for (int i = 0; i < arrayLength; ++i) {
+  	array_remove(p->children, i);
+  }
+  
+#endif 
+
   as_deactivate();
   /*
    * clear p_addrspace before calling as_destroy. Otherwise if
@@ -40,6 +51,16 @@ void sys__exit(int exitcode) {
   /* detach this thread from its process */
   /* note: curproc cannot be used after this call */
   proc_remthread(curthread);
+
+#if OPT_A2 
+
+  p->exit_code = _MKWAIT_EXIT(exitcode);
+  p->can_exit = true;
+  lock_acquire(p->wait_lock);
+  cv_broadcast(p->wait_cv, p->wait_lock);
+  lock_release(p->wait_lock);
+
+#endif //OPT_A2
 
   /* if this is the last user process in the system, proc_destroy()
      will wake up the kernel menu thread */
@@ -57,7 +78,11 @@ sys_getpid(pid_t *retval)
 {
   /* for now, this is just a stub that always returns a PID of 1 */
   /* you need to fix this to make it work properly */
+#if OPT_A2
+	*retval = curproc->pid;
+#else
   *retval = 1;
+#endif //OPT_A2
   return(0);
 }
 
@@ -65,9 +90,9 @@ sys_getpid(pid_t *retval)
 
 int
 sys_waitpid(pid_t pid,
-	    userptr_t status,
-	    int options,
-	    pid_t *retval)
+      userptr_t status,
+      int options,
+      pid_t *retval)
 {
   int exitstatus;
   int result;
@@ -80,12 +105,32 @@ sys_waitpid(pid_t pid,
 
      Fix this!
   */
-
   if (options != 0) {
     return(EINVAL);
   }
+
+#if OPT_A2
+  if (pid<0) return ESRCH;
+  struct proc *process_to_wait = NULL;
+  for (unsigned int i = 0; i < array_num(curproc->children); i++) {
+    process_to_wait = array_get(curproc->children, i);
+    if (pid == process_to_wait->pid) {
+      break;
+    }
+  }
+
+  if (process_to_wait->parent != curproc) return ECHILD;
+
+  lock_acquire(process_to_wait->wait_lock);
+  while(!process_to_wait->can_exit) {
+  	cv_wait(process_to_wait->wait_cv, process_to_wait->wait_lock);
+    }
+  lock_release(process_to_wait->wait_lock);
+  exitstatus=process_to_wait->exit_code;
+#else
   /* for now, just pretend the exitstatus is 0 */
   exitstatus = 0;
+#endif
   result = copyout((void *)&exitstatus,status,sizeof(int));
   if (result) {
     return(result);
@@ -137,9 +182,11 @@ sys_waitpid(pid_t pid,
       return ENOMEM;
     }
 
+    lock_acquire(curproc->wait_lock);
     array_add(curproc->children, child_process, NULL);
     child_process->parent = curproc;
-
+    lock_release(curproc->wait_lock);
+    lock_acquire(child_process->exit_lock);
     *retval = child_process->pid;
     return 0;
   }

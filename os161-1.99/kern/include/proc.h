@@ -73,11 +73,14 @@ struct proc {
 
 	/* add more material here as needed */
     pid_t pid;
-    int exitCode;
+    int exit_code;
     struct proc* parent;
-    struct cv* p_cv;
     struct array* children;
-    struct lock* plock; 
+    struct cv* p_cv;
+    struct cv* wait_cv;
+    struct lock* wait_lock;
+    struct lock* exit_lock; 
+    bool can_exit;
 
 };
 
