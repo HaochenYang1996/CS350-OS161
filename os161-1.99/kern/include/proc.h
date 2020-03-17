@@ -47,6 +47,11 @@ struct semaphore;
 #endif // UW
 #if OPT_A2
 pid_t new_pid(void);
+struct proc_info {
+  struct proc * proc_addr;
+  pid_t pid;
+  int exit_code;
+};
 #endif
 /*
  * Process structure.
@@ -75,12 +80,12 @@ struct proc {
     pid_t pid;
     int exit_code;
     struct proc* parent;
-    struct array* children;
-    struct cv* p_cv;
+    // struct array* children;
     struct cv* wait_cv;
     struct lock* wait_lock;
-    struct lock* exit_lock; 
     bool can_exit;
+    struct array* children_info;
+    struct trapframe *tf;
 
 };
 
