@@ -140,6 +140,7 @@ test(int nowait)
 	 * It is unrolled to encourage gcc to registerize the pids,
 	 * to prevent wait/exit problems if fork corrupts memory.
 	 */
+	 0 112222
 
 	pid0 = dofork();
 	putchar('0');
@@ -150,9 +151,9 @@ test(int nowait)
 	pid2 = dofork();
 	putchar('2');
 	check();
-	pid3 = dofork();
-	putchar('3');
-	check();
+	// pid3 = dofork();
+	// putchar('3');
+	// check();
 
 	/*
 	 * These must be called in reverse order to avoid waiting

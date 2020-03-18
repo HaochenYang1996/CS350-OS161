@@ -23,7 +23,7 @@ int dofork(int);
 void dowait(int,int);
 
 int
-dofork(int childnum) 
+dofork(int childnum)
 {
   pid_t pid;
   pid = fork();
@@ -65,15 +65,15 @@ main(int argc, char *argv[])
   (void)argc;
   (void)argv;
   pid_t pid1,pid2,pid3;
-  putchar('1');     // P
-  putchar('\n'); 
-  pid1 = dofork(1); // A fork exit
-  putchar('2');     // P
+  putchar('P');
   putchar('\n');
-  pid2 = dofork(2); // B fork exit B
-  putchar('3');     // P
+  pid1 = dofork(1);
+  putchar('P');
   putchar('\n');
-  pid3 = dofork(3); // C fork exit C
+  pid2 = dofork(2);
+  putchar('P');
+  putchar('\n');
+  pid3 = dofork(3);
   dowait(pid1,1);
   dowait(pid2,2);
   dowait(pid3,3);
