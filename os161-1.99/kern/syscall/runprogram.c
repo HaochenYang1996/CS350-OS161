@@ -111,17 +111,17 @@ runprogram(char *progname)
 	vaddr_t * stackArgs = kmalloc(sizeof(vaddr_t) * (argsLen+1));
 
 	for (int i = argsLen; i>=0; i--) {
-		if (i == argsLen) {
-		stackArgs[argsLen] =(vaddr_t)  NULL;
-		continue;
+			if (i == argsLen) {
+			stackArgs[argsLen] =(vaddr_t)  NULL;
+			continue;
 		} else {
-		int curArgLen = ROUNDUP(strlen(argsKernel[i]) + 1, 4);
-		curStackPtr-=curArgLen*sizeof(char);
-		// stackArgs[i] = malloc(sizeof(vaddr_t));
-		// KASSERT(curVaddr);
-		int copyResult = copyout((const_userptr_t) argsKernel[i], (userptr_t) curStackPtr, curArgLen);
-		KASSERT(copyResult == 0);
-		stackArgs[i] = curStackPtr;
+			int curArgLen = ROUNDUP(strlen(argsKernel[i]) + 1, 4);
+			curStackPtr-=curArgLen*sizeof(char);
+			// stackArgs[i] = malloc(sizeof(vaddr_t));
+			// KASSERT(curVaddr);
+			int copyResult = copyout((const_userptr_t) argsKernel[i], (userptr_t) curStackPtr, curArgLen);
+			KASSERT(copyResult == 0);
+			stackArgs[i] = curStackPtr;
 		}
 	}
 

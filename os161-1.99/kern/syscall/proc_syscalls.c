@@ -320,15 +320,20 @@ int sys_execv(const char *progname, char **args)
 	int argsLen = 0;
   struct addrspace *oldas;
 
+  // allocate space to copy program name(null-terminated) 
+  //   Remember that strlen does not count the NULL terminator. Make sure
+  // to include room for the NULL terminator.
 	size_t progLen = sizeof(char) * (strlen(progname)+1);
 	char * prognameKernel = kmalloc(progLen);
 	KASSERT(prognameKernel!=NULL);
-	int progCopyResult = copyin((userptr_t) progname, prognameKernel,progLen);
+  // size_t *got = 0;
+	int progCopyResult = copyinstr((userptr_t) progname, prognameKernel,progLen, &progLen);
 	KASSERT(progCopyResult == 0);
+
 	// kprintf("Program name after copy is :\n");
 	// kprintf(prognameKernel);
 
-	// find arg Len
+	// find args length
 	for (int i=0; args[i] != NULL; i++) {
 		argsLen++;
 	}
@@ -344,7 +349,7 @@ int sys_execv(const char *progname, char **args)
 		size_t lenCurArg = sizeof(char) * (strlen(args[i])+1); 
 		argsKernel[i] = kmalloc(lenCurArg);
 		KASSERT(argsKernel[i]);
-		int copyArgResult = copyin((const_userptr_t) args[i], argsKernel[i], lenCurArg);
+		int copyArgResult = copyinstr((const_userptr_t) args[i], argsKernel[i], lenCurArg, &lenCurArg);
 		KASSERT(copyArgResult == 0);
 	}
 
