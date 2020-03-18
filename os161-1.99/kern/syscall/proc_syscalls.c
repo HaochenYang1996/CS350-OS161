@@ -308,86 +308,124 @@ sys_fork( pid_t *retval, struct trapframe *tf)
   return(0);
 }
 
-int execv(const char *progname, char **args)
-{
-  (void) progname;
-  (void) args;
-	// struct addrspace *as;
-	// struct vnode *v;
-	// vaddr_t entrypoint, stackptr;
-	// int result;
-	// int argsLen = 0;
-  // struct addrspace *oldas;
 
-	// size_t progLen = sizeof(char) * (strlen(progname)+1);
-	// char * prognameKernel = kmalloc(progLen);
-	// KASSERT(prognameKernel!=NULL);
-	// int progCopyResult = copyin((userptr_t) progname, prognameKernel,progLen);
-	// KASSERT(progCopyResult == 0);
+int sys_execv(const char *progname, char **args)
+{
+  // (void) progname;
+  // (void) args;
+	struct addrspace *as;
+	struct vnode *v;
+	vaddr_t entrypoint, stackptr;
+	int result;
+	int argsLen = 0;
+  struct addrspace *oldas;
+
+	size_t progLen = sizeof(char) * (strlen(progname)+1);
+	char * prognameKernel = kmalloc(progLen);
+	KASSERT(prognameKernel!=NULL);
+	int progCopyResult = copyin((userptr_t) progname, prognameKernel,progLen);
+	KASSERT(progCopyResult == 0);
 	// kprintf("Program name after copy is :\n");
 	// kprintf(prognameKernel);
 
-	// // find arg Len
-	// for (int i=0; args[i] != NULL; i++) {
-	// 	argsLen++;
-	// }
+	// find arg Len
+	for (int i=0; args[i] != NULL; i++) {
+		argsLen++;
+	}
 
-	// // copy args in user space to kernel
-	// char **argsKernel = kmalloc(sizeof(char *) * (argsLen+1)); 
-	// KASSERT(argsKernel!=NULL);
-	// for (int i = 0; i<=argsLen; i++) {
-	// 	if (i == argsLen) {
-	// 		argsKernel[i] = NULL;
-	// 		break;
-	// 	}
-	// 	size_t lenCurArg = sizeof(char) * (strlen(args[i])+1); 
-	// 	argsKernel[i] = kmalloc(lenCurArg);
-	// 	KASSERT(argsKernel[i]);
-	// 	int copyArgResult = copyin((const_userptr_t) args[i], argsKernel[i], lenCurArg);
-	// 	KASSERT(copyArgResult == 0);
-	// }
+	// copy args in user space to kernel
+	char **argsKernel = kmalloc(sizeof(char *) * (argsLen+1)); 
+	KASSERT(argsKernel!=NULL);
+	for (int i = 0; i<=argsLen; i++) {
+		if (i == argsLen) {
+			argsKernel[i] =  NULL;
+			break;
+		}
+		size_t lenCurArg = sizeof(char) * (strlen(args[i])+1); 
+		argsKernel[i] = kmalloc(lenCurArg);
+		KASSERT(argsKernel[i]);
+		int copyArgResult = copyin((const_userptr_t) args[i], argsKernel[i], lenCurArg);
+		KASSERT(copyArgResult == 0);
+	}
 
 
-	// /* Open the file. */
-	// result = vfs_open(prognameKernel, O_RDONLY, 0, &v);
-	// if (result) {
-	// 	return result;
-	// }
+	/* Open the file. */
+	result = vfs_open(prognameKernel, O_RDONLY, 0, &v);
+	if (result) {
+		return result;
+	}
 
-	// /* We should be a new process. */
-	// // KASSERT(curproc_getas() == NULL);
+	/* We should be a new process. */
+	// KASSERT(curproc_getas() == NULL);
 
-	// /* Create a new address space. */
-	// as = as_create();
-	// if (as ==NULL) {
-	// 	vfs_close(v);
-	// 	return ENOMEM;
-	// }
+	/* Create a new address space. */
+	as = as_create();
+	if (as ==NULL) {
+		vfs_close(v);
+		return ENOMEM;
+	}
 
-	// /* Switch to it and activate it. */
-	// oldas = curproc_setas(as);
-	// as_activate();
+	/* Switch to it and activate it. */
+	oldas = curproc_setas(as);
+	as_activate();
 
-	// /* Load the executable. */
-	// result = load_elf(v, &entrypoint);
-	// if (result) {
-	// 	/* p_addrspace will go away when curproc is destroyed */
-	// 	vfs_close(v);
-	// 	return result;
-	// }
+	/* Load the executable. */
+	result = load_elf(v, &entrypoint);
+	if (result) {
+		/* p_addrspace will go away when curproc is destroyed */
+		vfs_close(v);
+		return result;
+	}
 
-	// /* Done with the file now. */
-	// vfs_close(v);
+	/* Done with the file now. */
+	vfs_close(v);
 
-	// /* Define the user stack in the address space */
-	// result = as_define_stack(as, &stackptr);
-	// if (result) {
-	// 	/* p_addrspace will go away when curproc is destroyed */
-	// 	return result;
-	// }
+	/* Define the user stack in the address space */
+	result = as_define_stack(as, &stackptr);
+	if (result) {
+		/* p_addrspace will go away when curproc is destroyed */
+		return result;
+	}
 
-	// as_destroy(oldas);
+  // copy args to user stack
+  vaddr_t curStackPtr = stackptr;
+  vaddr_t * stackArgs = kmalloc(sizeof(vaddr_t) * (argsLen+1));
 
-	return 0;
+  for (int i = argsLen; i>=0; i--) {
+    if (i == argsLen) {
+      stackArgs[argsLen] =(vaddr_t)  NULL;
+      continue;
+    } else {
+      int curArgLen = ROUNDUP(strlen(argsKernel[i]) + 1, 4);
+      curStackPtr-=curArgLen*sizeof(char);
+      // stackArgs[i] = malloc(sizeof(vaddr_t));
+      // KASSERT(curVaddr);
+      int copyResult = copyout((const_userptr_t) argsKernel[i], (userptr_t) curStackPtr, curArgLen);
+      KASSERT(copyResult == 0);
+      stackArgs[i] = curStackPtr;
+    }
+  }
+
+  for (int i = argsLen; i>=0; i--) {
+    curStackPtr-=sizeof(vaddr_t);
+    int copyResult = copyout((const_userptr_t) &stackArgs[i], (userptr_t) curStackPtr, sizeof(vaddr_t));
+    KASSERT(copyResult == 0);
+  }
+
+  as_destroy(oldas);
+  // KASSERT(argsKernel==NULL);
+  int pos =0;
+  while (pos<=argsLen) {
+    kfree(argsKernel[pos]);
+    pos++;
+  }
+  kfree(argsKernel);
+  kfree(prognameKernel);
+
+  enter_new_process(argsLen, (userptr_t) curStackPtr, ROUNDUP(curStackPtr, 8), entrypoint);
+
+	return EINVAL;
 }
+
+
 
