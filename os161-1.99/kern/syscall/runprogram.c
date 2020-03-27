@@ -103,7 +103,6 @@ runprogram(char *progname)
 		return result;
 	}
 
-
 	char **argsKernel = args; 
 	KASSERT(argsKernel!=NULL);
 	// copy args to user stack
@@ -127,16 +126,13 @@ runprogram(char *progname)
 
 	for (int i = argsLen; i>=0; i--) {
 		curStackPtr-=sizeof(vaddr_t);
-		int copyResult = copyout((const_userptr_t) &stackArgs[i], (userptr_t) curStackPtr, sizeof(vaddr_t));
+		int copyResult = copyout((const_userptr_t)  &stackArgs[i], (userptr_t) curStackPtr, sizeof(vaddr_t));
 		KASSERT(copyResult == 0);
 	}
 
 	kfree(oldAS);
     enter_new_process(argsLen, (userptr_t) curStackPtr, ROUNDUP(curStackPtr, 8), entrypoint);
-
 	
-	/* enter_new_process does not return. */
-	panic("enter_new_process returned\n");
 	return EINVAL;
 #else
 	struct addrspace *as;

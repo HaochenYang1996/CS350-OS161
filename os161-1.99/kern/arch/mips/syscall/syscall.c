@@ -195,9 +195,9 @@ void enter_forked_process(void * tf, unsigned long data)
 	(void)data;
 	struct trapframe * tmp = tf;
 	struct trapframe local_copy_tf = *tmp;
-	local_copy_tf.tf_v0 = 0; // return 0 to the child
-	local_copy_tf.tf_a3 = 0;// there is no error
 	local_copy_tf.tf_epc += 4;
+	local_copy_tf.tf_v0 = 0; 
+	local_copy_tf.tf_a3 = 0;
 	kfree(tmp);
 	mips_usermode(&local_copy_tf);
 }
