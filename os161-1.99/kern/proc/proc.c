@@ -50,7 +50,6 @@
 #include <vfs.h>
 #include <synch.h>
 #include <kern/fcntl.h>  
-#include "opt-A2.h"
 
 /*
  * The process for the kernel; this holds all the kernel-only threads.
@@ -69,13 +68,7 @@ static struct semaphore *proc_count_mutex;
 /* used to signal the kernel menu thread when there are no processes */
 struct semaphore *no_proc_sem;   
 #endif  // UW
-#if OPT_A2
-pid_t currentpid = 0;
 
-pid_t generateNewPid(){
-  return currentpid++;
-}
-#endif
 
 
 /*
@@ -86,6 +79,7 @@ struct proc *
 proc_create(const char *name)
 {
 	struct proc *proc;
+
 	proc = kmalloc(sizeof(*proc));
 	if (proc == NULL) {
 		return NULL;
@@ -96,10 +90,8 @@ proc_create(const char *name)
 		return NULL;
 	}
 
-	proc->tf = NULL;
 	threadarray_init(&proc->p_threads);
 	spinlock_init(&proc->p_lock);
-	proc->childrenStatus = array_create();
 
 	/* VM fields */
 	proc->p_addrspace = NULL;
@@ -110,24 +102,13 @@ proc_create(const char *name)
 #ifdef UW
 	proc->console = NULL;
 #endif // UW
-#if OPT_A2
-    proc->pid = generateNewPid();
-    proc->exit_code = 0;
-    proc->parent= NULL;
-	proc->wait_cv = cv_create("wait CV");
-	proc->can_exit = false;
-	if(proc->wait_cv == NULL){
-	  panic("proc_creat does not create wait cv");
-	}
-    // proc->children = array_create();
-    proc->wait_lock = lock_create("process wait lock");
-	if (proc->wait_lock == NULL) {
-	  panic("proc_creat does not create wait lock");
-	}; 
-#endif
+
 	return proc;
 }
 
+/*
+ * Destroy a proc structure.
+ */
 void
 proc_destroy(struct proc *proc)
 {
@@ -142,6 +123,7 @@ proc_destroy(struct proc *proc)
 
 	KASSERT(proc != NULL);
 	KASSERT(proc != kproc);
+
 	/*
 	 * We don't take p_lock in here because we must have the only
 	 * reference to this structure. (Otherwise it would be
@@ -154,21 +136,6 @@ proc_destroy(struct proc *proc)
 		proc->p_cwd = NULL;
 	}
 
-#if OPT_A2
-  	// destroy children status array
-  	lock_acquire(proc->wait_lock);
-    for (int i =array_num(proc->childrenStatus)-1; i >= 0; --i) {
-      struct procStatus *childStatus = (struct procStatus *)array_get(proc->childrenStatus, i);
-      childStatus->procAddr->parent = NULL;
-      kfree(childStatus);
-      array_remove(proc->childrenStatus,i);
-    }
-    array_destroy(proc->childrenStatus);
-  	lock_release(proc->wait_lock);
-  	// destroy cv and lock
-	lock_destroy(proc->wait_lock);
-	cv_destroy(proc->wait_cv);
-#endif
 
 #ifndef UW  // in the UW version, space destruction occurs in sys_exit, not here
 	if (proc->p_addrspace) {
@@ -207,7 +174,7 @@ proc_destroy(struct proc *proc)
         /* note: kproc is not included in the process count, but proc_destroy
 	   is never called on kproc (see KASSERT above), so we're OK to decrement
 	   the proc_count unconditionally here */
-	P(proc_count_mutex);
+	P(proc_count_mutex); 
 	KASSERT(proc_count > 0);
 	proc_count--;
 	/* signal the kernel menu thread if the process count has reached zero */
@@ -216,8 +183,7 @@ proc_destroy(struct proc *proc)
 	}
 	V(proc_count_mutex);
 #endif // UW
-
-
+	
 
 }
 

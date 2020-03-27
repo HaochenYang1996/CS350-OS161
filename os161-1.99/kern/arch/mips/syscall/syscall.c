@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2008, 2009
  *	The President and Fellows of Harvard College.
@@ -36,8 +35,6 @@
 #include <thread.h>
 #include <current.h>
 #include <syscall.h>
-#include "opt-A2.h"
-#include <proc.h>
 
 
 /*
@@ -111,15 +108,6 @@ syscall(struct trapframe *tf)
 		err = sys___time((userptr_t)tf->tf_a0,
 				 (userptr_t)tf->tf_a1);
 		break;
-#if OPT_A2
-		case SYS_fork:
-		err = sys_fork((pid_t *)&retval, tf);
-		break;
-
-		case SYS_execv:
-		err = sys_execv((char *) tf->tf_a0, (char **)tf->tf_a1);
-		break;
-#endif
 #ifdef UW
 	case SYS_write:
 	  err = sys_write((int)tf->tf_a0,
@@ -188,17 +176,8 @@ syscall(struct trapframe *tf)
  *
  * Thus, you can trash it and do things another way if you prefer.
  */
-// void
-// enter_forked_process(struct trapframe *tf)
-void enter_forked_process(void * tf, unsigned long data)
+void
+enter_forked_process(struct trapframe *tf)
 {
-	(void)data;
-	struct trapframe * tmp = tf;
-	struct trapframe local_copy_tf = *tmp;
-	local_copy_tf.tf_epc += 4;
-	local_copy_tf.tf_v0 = 0; 
-	local_copy_tf.tf_a3 = 0;
-	kfree(tmp);
-	mips_usermode(&local_copy_tf);
+	(void)tf;
 }
-
