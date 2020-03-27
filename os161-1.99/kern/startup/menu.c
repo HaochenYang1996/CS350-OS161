@@ -45,7 +45,7 @@
 #include "opt-synchprobs.h"
 #include "opt-sfs.h"
 #include "opt-net.h"
-//#include <kern/dev/lamebus/ltrace.h>
+
 /*
  * In-kernel menu and command dispatcher.
  */
@@ -93,26 +93,16 @@ cmd_progthread(void *ptr, unsigned long nargs)
 
 	KASSERT(nargs >= 1);
 
-#if OPT_A2
-	/* if (nargs > 2) { */
-	/* 	kprintf("Warning: argument passing from menu not supported\n"); */
-	/* } */
-#else
 	if (nargs > 2) {
 		kprintf("Warning: argument passing from menu not supported\n");
 	}
-#endif
 
 	/* Hope we fit. */
 	KASSERT(strlen(args[0]) < sizeof(progname));
 
 	strcpy(progname, args[0]);
 
-#if OPT_A2
-	result = runprogram(progname, (int) nargs, args);
-#else
 	result = runprogram(progname);
-#endif
 	if (result) {
 		kprintf("Running program %s failed: %s\n", args[0],
 			strerror(result));
@@ -121,16 +111,6 @@ cmd_progthread(void *ptr, unsigned long nargs)
 
 	/* NOTREACHED: runprogram only returns on error. */
 }
-
-
-// Haochen's work
-static int cmd_dth()
-{
-	dbflags = 0x0010;
-//    trace_debug("current DB flag is: %s\n", dbflags);
-	return 0;
-}
-
 
 /*
  * Common code for cmd_prog and cmd_shell.
@@ -526,8 +506,7 @@ static const char *mainmenu[] = {
 #endif
 	"[kh] Kernel heap stats              ",
 	"[q] Quit and shut down              ",
-	"[dth] Enable DBTread Error          ",	
-NULL
+	NULL
 };
 
 static
@@ -557,7 +536,6 @@ static struct {
 	{ "?t",		cmd_testmenu },
 
 	/* operations */
-    { "dth", cmd_dth},
 	{ "s",		cmd_shell },
 	{ "p",		cmd_prog },
 	{ "mount",	cmd_mount },
