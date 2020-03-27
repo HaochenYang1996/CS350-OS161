@@ -72,7 +72,7 @@ struct semaphore *no_proc_sem;
 #if OPT_A2
 pid_t currentpid = 0;
 
-pid_t new_pid(){
+pid_t generateNewPid(){
   return currentpid++;
 }
 #endif
@@ -86,7 +86,6 @@ struct proc *
 proc_create(const char *name)
 {
 	struct proc *proc;
-
 	proc = kmalloc(sizeof(*proc));
 	if (proc == NULL) {
 		return NULL;
@@ -100,8 +99,7 @@ proc_create(const char *name)
 	proc->tf = NULL;
 	threadarray_init(&proc->p_threads);
 	spinlock_init(&proc->p_lock);
-
-	proc->children_info = array_create();
+	proc->childrenStatus = array_create();
 
 	/* VM fields */
 	proc->p_addrspace = NULL;
@@ -113,10 +111,11 @@ proc_create(const char *name)
 	proc->console = NULL;
 #endif // UW
 #if OPT_A2
-    proc->pid = new_pid();
+    proc->pid = generateNewPid();
     proc->exit_code = 0;
-    proc->parent=NULL;
-	proc->wait_cv=cv_create("wait CV");
+    proc->parent= NULL;
+	proc->wait_cv = cv_create("wait CV");
+	proc->can_exit = false;
 	if(proc->wait_cv == NULL){
 	  panic("proc_creat does not create wait cv");
 	}
@@ -125,111 +124,9 @@ proc_create(const char *name)
 	if (proc->wait_lock == NULL) {
 	  panic("proc_creat does not create wait lock");
 	}; 
-	proc->can_exit = false;
 #endif
 	return proc;
 }
-
-/*
- * Destroy a proc structure.
- */
-// void
-// proc_destroy(struct proc *proc)
-// {
-// 	/*
-//          * note: some parts of the process structure, such as the address space,
-//          *  are destroyed in sys_exit, before we get here
-//          *
-//          * note: depending on where this function is called from, curproc may not
-//          * be defined because the calling thread may have already detached itself
-//          * from the process.
-// 	 */
-
-// 	KASSERT(proc != NULL);
-// 	KASSERT(proc != kproc);
-
-// 	/*
-// 	 * We don't take p_lock in here because we must have the only
-// 	 * reference to this structure. (Otherwise it would be
-// 	 * incorrect to destroy it.)
-// 	 */
-
-// 	/* VFS fields */
-// 	if (proc->p_cwd) {
-// 		VOP_DECREF(proc->p_cwd);
-// 		proc->p_cwd = NULL;
-// 	}
-
-
-// #ifndef UW  // in the UW version, space destruction occurs in sys_exit, not here
-// 	if (proc->p_addrspace) {
-// 		/*
-// 		 * In case p is the currently running process (which
-// 		 * it might be in some circumstances, or if this code
-// 		 * gets moved into exit as suggested above), clear
-// 		 * p_addrspace before calling as_destroy. Otherwise if
-// 		 * as_destroy sleeps (which is quite possible) when we
-// 		 * come back we'll be calling as_activate on a
-// 		 * half-destroyed address space. This tends to be
-// 		 * messily fatal.
-// 		 */
-// 		struct addrspace *as;
-
-// 		as_deactivate();
-// 		as = curproc_setas(NULL);
-// 		as_destroy(as);
-// 	}
-// #endif // UW
-
-// #ifdef UW
-// 	if (proc->console) {
-// 	  vfs_close(proc->console);
-// 	}
-// #endif // UW
-// #if OPT_A2
-// 	lock_acquire(proc->wait_lock);
-// 	for (int i = array_num(proc->children_info) - 1; i >= 0; i--) {
-// 		struct proc_info *pinfo = (struct proc_info *)array_get(proc->children_info, i);
-// 		pinfo->proc_addr->parent = NULL;
-// 		kfree(pinfo);
-// 		array_remove(proc->children_info, i);
-// 	}
-// 	array_destroy(proc->children_info);
-// 	lock_release(proc->wait_lock);
-// 	// spinlock_acquire(&proc->p_lock);
-// 	// for (unsigned int i = 0; i < array_num(proc->children); ++i) {
-// 	// 	struct proc *p = array_get(proc->children, i);
-// 	// 	p->parent = NULL;
-// 	// }
-// 	// spinlock_release(&proc->p_lock);
-// 	// array_cleanup(proc->children);
-// 	lock_destroy(proc->wait_lock);
-// 	cv_destroy(proc->wait_cv);
-
-// #endif //OPT_A2
-// 	threadarray_cleanup(&proc->p_threads);
-// 	spinlock_cleanup(&proc->p_lock);
-
-// 	kfree(proc->p_name);
-// 	kfree(proc);
-
-// #ifdef UW
-// 	/* decrement the process count */
-//         /* note: kproc is not included in the process count, but proc_destroy
-// 	   is never called on kproc (see KASSERT above), so we're OK to decrement
-// 	   the proc_count unconditionally here */
-// 	P(proc_count_mutex); 
-// 	KASSERT(proc_count > 0);
-// 	proc_count--;
-// 	/* signal the kernel menu thread if the process count has reached zero */
-// 	if (proc_count == 0) {
-// 	  V(no_proc_sem);
-// 	}
-// 	V(proc_count_mutex);
-// #endif // UW
-	
-
-// }
 
 void
 proc_destroy(struct proc *proc)
@@ -245,11 +142,6 @@ proc_destroy(struct proc *proc)
 
 	KASSERT(proc != NULL);
 	KASSERT(proc != kproc);
-
-  /****************************** MEM LEAK HERE FIX THIS *******************************/
-  /* if (proc->tf != NULL) kfree(proc->tf); */
-  /****************************** MEM LEAK HERE FIX THIS *******************************/
-
 	/*
 	 * We don't take p_lock in here because we must have the only
 	 * reference to this structure. (Otherwise it would be
@@ -263,17 +155,17 @@ proc_destroy(struct proc *proc)
 	}
 
 #if OPT_A2
-  // destroy children_info array
-  lock_acquire(proc->wait_lock);
-    for (int i = array_num(proc->children_info) - 1; i >= 0; i--) {
-      struct proc_info *pinfo = (struct proc_info *)array_get(proc->children_info, i);
-      pinfo->proc_addr->parent = NULL;
-      kfree(pinfo);
-      array_remove(proc->children_info, i);
+  	// destroy children status array
+  	lock_acquire(proc->wait_lock);
+    for (int i =array_num(proc->childrenStatus)-1; i >= 0; --i) {
+      struct procStatus *childStatus = (struct procStatus *)array_get(proc->childrenStatus, i);
+      childStatus->procAddr->parent = NULL;
+      kfree(childStatus);
+      array_remove(proc->childrenStatus,i);
     }
-    array_destroy(proc->children_info);
-  lock_release(proc->wait_lock);
-  // destroy is_dying cv and lock on children array
+    array_destroy(proc->childrenStatus);
+  	lock_release(proc->wait_lock);
+  	// destroy cv and lock
 	lock_destroy(proc->wait_lock);
 	cv_destroy(proc->wait_cv);
 #endif

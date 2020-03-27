@@ -103,7 +103,6 @@ runprogram(char *progname)
 		return result;
 	}
 
-
 	char **argsKernel = args; 
 	KASSERT(argsKernel!=NULL);
 	// copy args to user stack
@@ -111,32 +110,29 @@ runprogram(char *progname)
 	vaddr_t * stackArgs = kmalloc(sizeof(vaddr_t) * (argsLen+1));
 
 	for (int i = argsLen; i>=0; i--) {
-		if (i == argsLen) {
-		stackArgs[argsLen] =(vaddr_t)  NULL;
-		continue;
+			if (i == argsLen) {
+			stackArgs[argsLen] =(vaddr_t)  NULL;
+			continue;
 		} else {
-		int curArgLen = ROUNDUP(strlen(argsKernel[i]) + 1, 4);
-		curStackPtr-=curArgLen*sizeof(char);
-		// stackArgs[i] = malloc(sizeof(vaddr_t));
-		// KASSERT(curVaddr);
-		int copyResult = copyout((const_userptr_t) argsKernel[i], (userptr_t) curStackPtr, curArgLen);
-		KASSERT(copyResult == 0);
-		stackArgs[i] = curStackPtr;
+			int curArgLen = ROUNDUP(strlen(argsKernel[i]) + 1, 4);
+			curStackPtr-=curArgLen*sizeof(char);
+			// stackArgs[i] = malloc(sizeof(vaddr_t));
+			// KASSERT(curVaddr);
+			int copyResult = copyout((const_userptr_t) argsKernel[i], (userptr_t) curStackPtr, curArgLen);
+			KASSERT(copyResult == 0);
+			stackArgs[i] = curStackPtr;
 		}
 	}
 
 	for (int i = argsLen; i>=0; i--) {
 		curStackPtr-=sizeof(vaddr_t);
-		int copyResult = copyout((const_userptr_t) &stackArgs[i], (userptr_t) curStackPtr, sizeof(vaddr_t));
+		int copyResult = copyout((const_userptr_t)  &stackArgs[i], (userptr_t) curStackPtr, sizeof(vaddr_t));
 		KASSERT(copyResult == 0);
 	}
 
 	kfree(oldAS);
     enter_new_process(argsLen, (userptr_t) curStackPtr, ROUNDUP(curStackPtr, 8), entrypoint);
-
 	
-	/* enter_new_process does not return. */
-	panic("enter_new_process returned\n");
 	return EINVAL;
 #else
 	struct addrspace *as;
