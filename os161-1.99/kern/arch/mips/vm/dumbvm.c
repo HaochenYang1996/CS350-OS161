@@ -37,6 +37,7 @@
 #include <mips/tlb.h>
 #include <addrspace.h>
 #include <vm.h>
+#include "opt-A3.h"
 
 /*
  * Dumb MIPS-only "VM system" that is intended to only be just barely
@@ -113,6 +114,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	uint32_t ehi, elo;
 	struct addrspace *as;
 	int spl;
+	bool segValid = false;
 
 	faultaddress &= PAGE_FRAME;
 
@@ -120,13 +122,15 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 
 	switch (faulttype) {
 	    case VM_FAULT_READONLY:
-		/* We always create pages read-write, so we can't get this */
-		panic("dumbvm: got VM_FAULT_READONLY\n");
-	    case VM_FAULT_READ:
-	    case VM_FAULT_WRITE:
-		break;
-	    default:
-		return EINVAL;
+#if OPT_A3
+    		return EFAULT;
+    //    panic("dumbvm: got VM_FAULT_READONLY\n");
+ #endif
+		case VM_FAULT_READ:
+		case VM_FAULT_WRITE:
+			break;
+		default:
+			return EINVAL;
 	}
 
 	if (curproc == NULL) {
@@ -169,7 +173,9 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	stacktop = USERSTACK;
 
 	if (faultaddress >= vbase1 && faultaddress < vtop1) {
+		// kprintf("vtop1: %d\n", );
 		paddr = (faultaddress - vbase1) + as->as_pbase1;
+		segValid = true;
 	}
 	else if (faultaddress >= vbase2 && faultaddress < vtop2) {
 		paddr = (faultaddress - vbase2) + as->as_pbase2;
@@ -194,12 +200,26 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		}
 		ehi = faultaddress;
 		elo = paddr | TLBLO_DIRTY | TLBLO_VALID;
+   #if OPT_A3
+    	if (as->loadELFComplete && segValid) {
+			elo = elo & ~TLBLO_DIRTY;
+		} 
+   #endif
 		DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, paddr);
 		tlb_write(ehi, elo, i);
 		splx(spl);
 		return 0;
 	}
-
+#if OPT_A3
+   ehi = faultaddress;
+   elo = TLBLO_VALID | paddr | TLBLO_DIRTY ;
+   if (segValid &&as->loadELFComplete) {
+	   elo = elo & ~TLBLO_DIRTY;
+   }
+   tlb_random(ehi, elo);  
+   splx(spl);
+   return 0;
+#endif
 	kprintf("dumbvm: Ran out of TLB entries - cannot handle page fault\n");
 	splx(spl);
 	return EFAULT;
@@ -220,7 +240,7 @@ as_create(void)
 	as->as_pbase2 = 0;
 	as->as_npages2 = 0;
 	as->as_stackpbase = 0;
-
+	as->loadELFComplete = false;
 	return as;
 }
 
